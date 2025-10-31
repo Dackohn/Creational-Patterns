@@ -225,15 +225,14 @@ std::string registerCustomer(const std::string& name,
                              const std::string& phone,
                              CustomerType type = CustomerType::REGULAR) {
     std::string customerId = "CUST-" + std::to_string(++customerCounter);
-    std::string prefix = CustomerFactory::getTypePrefix(type);
     
-    auto customer = CustomerBuilder()
-        .withId(customerId)
-        .withName(prefix + name)
-        .withEmail(email)
-        .withPhone(phone)
-        .withType(type)
-        .build();
+    auto customer = CustomerFactory::createCustomer(
+        customerId,
+        name,
+        email,
+        phone,
+        type
+    );
     
     customerRepo.save(*customer);
     logger->log("Customer registered: " + customerId + " - " + name + 
@@ -405,12 +404,29 @@ TicketBuilder()
 
 ### Implementation
 
-Two factory classes centralize object creation logic and type-specific behavior.
+Three factory classes centralize object creation logic and business rules. The factories work seamlessly with builders to create complex objects.
 
-#### Example 1: CustomerFactory
+#### Example 1: CustomerFactory (Combined with Builder)
 ```cpp
 class CustomerFactory {
 public:
+    static std::shared_ptr<Customer> createCustomer(
+        const std::string& id,
+        const std::string& name,
+        const std::string& email,
+        const std::string& phone,
+        CustomerType type
+    ) {
+        std::string prefixedName = getTypePrefix(type) + name;
+        return CustomerBuilder()
+            .withId(id)
+            .withName(prefixedName)
+            .withEmail(email)
+            .withPhone(phone)
+            .withType(type)
+            .build();
+    }
+    
     static std::string getTypePrefix(CustomerType type) {
         switch (type) {
             case CustomerType::PREMIUM:
@@ -439,15 +455,17 @@ public:
 
 **In CustomerService::registerCustomer():**
 ```cpp
-std::string prefix = CustomerFactory::getTypePrefix(type);
-auto customer = CustomerBuilder()
-    .withId(customerId)
-    .withName(prefix + name)
-    .withEmail(email)
-    .withPhone(phone)
-    .withType(type)
-    .build();
+std::string customerId = "CUST-" + std::to_string(++customerCounter);
 
+auto customer = CustomerFactory::createCustomer(
+    customerId,
+    name,
+    email,
+    phone,
+    type
+);
+
+customerRepo.save(*customer);
 logger->log("Customer registered: " + customerId + " - " + name + 
            " (Type: " + CustomerFactory::getTypeName(type) + ")");
 ```
@@ -680,8 +698,9 @@ Notify via Singleton NotificationService
 - Single notification service uses builder-created objects
 
 **Factory + Builder:**
-- Factory provides business logic (agent, tags)
-- Builder uses factory output to construct objects
+- Factory encapsulates builder usage for clean object creation
+- CustomerFactory uses CustomerBuilder internally
+- TicketFactory provides business logic (agent, tags) and uses TicketBuilder
 
 **Singleton + Factory:**
 - Singleton ensures consistent factory usage
@@ -735,8 +754,8 @@ Customer ID: CUST-1001
 ```
 
 **Behind the Scenes:**
-1. **Factory** provides "[VIP] " prefix
-2. **Builder** constructs Customer with all properties
+1. **Factory** creates customer using internal Builder
+2. **Factory** applies "[VIP] " prefix during construction
 3. **Singleton** repository stores the customer
 
 ### Creating a Critical Technical Ticket (All Patterns)
